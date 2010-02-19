@@ -1,0 +1,26 @@
+---
+abstract: 'Client code for querying multible DNSBLs'
+author:
+  - 'David Skoll <dfs@roaringpenguin.com>,'
+build_requires:
+  Test::Deep: 0
+  Test::Exception: 0
+  Test::More: 0.82
+distribution_type: module
+generated_by: 'Module::Install version 0.76'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Net-DNSBL-Client
+no_index:
+  directory:
+    - inc
+    - t
+requires:
+  IO::Socket: 0
+  Net::DNS::Resolver: 0
+  perl: 5.8.0
+resources:
+  license: http://dev.perl.org/licenses/
+version: 0.100
