@@ -1,3 +1,13 @@
+0.200	Mon, 22 Feb 2010 16:12:37 -0500	dfs
+
+	Add "return_all" option to query_ip.  This returns all DNSBLs, even
+	those that were not hit.  Allows you to get more info back from the
+	resolver as to why a DNSBL was not hit.
+
+	Fix misleading examples in POD.
+
+	Convert incorrect build_requires to test_requires in Makefile.PL
+
 0.100	Thu, 18 Feb 2010 10:56:30 -0500	dfs
 
 	First usable version.

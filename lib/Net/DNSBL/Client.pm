@@ -7,11 +7,11 @@ use Carp;
 use Net::DNS::Resolver;
 use IO::Select;
 
-our $VERSION = '0.100';
+our $VERSION = '0.200';
 
 =head1 NAME
 
-Net::DNSBL::Client - Client code for querying multible DNSBLs
+Net::DNSBL::Client - Client code for querying multiple DNSBLs
 
 =head1 SYNOPSIS
 
@@ -20,7 +20,7 @@ Net::DNSBL::Client - Client code for querying multible DNSBLs
 
     $c->query_ip('127.0.0.2', [
         { domain => 'simple.dnsbl.tld' },
-        { domain => 'masked.dnsbl.tld', type => 'mask', data => '127.0.0.255' }
+        { domain => 'masked.dnsbl.tld', type => 'mask', data => '0.0.0.255' }
     ]);
 
     # And later...
@@ -110,10 +110,10 @@ yet been called.  Returns zero otherwise.
 
 =item query_ip ( $ipaddr, $dnsbls [, $options])
 
-Issues a set of DNS queries.  Note that the query_ip() method returns as
+Issues a set of DNS queries.  Note that the I<query_ip()> method returns as
 soon as the DNS queries have been issued.  It does I<not> wait for
-DNS responses to come in.  Once query_ip() has been called, the
-Net::DNSBL::Client object is said to have a query I<in flight>.  query_ip()
+DNS responses to come in.  Once I<query_ip()> has been called, the
+Net::DNSBL::Client object is said to have a query I<in flight>.  I<query_ip()>
 may not be called again while a query is in flight.
 
 $ipaddr is the text representation of an IPv4 or IPv6 address.
@@ -151,8 +151,8 @@ It is simply returned back unchanged in the list of hits.
 
 =back
 
-$options, if supplied, is a hash of options.  Currently, only one option
-is defined:
+$options, if supplied, is a hash of options.  Currently, two options
+are defined:
 
 =over 4
 
@@ -160,6 +160,14 @@ is defined:
 
 If set to 1, querying will stop after the first positive result is
 received, even if other DNSBLs are being queried.  Default is 0.
+
+=item return_all
+
+If set to 1, then the return value from I<get_answers()> will contain
+all DNSBLs that were supplied to I<query_ip()>, even if the DNSBL did not
+hit.  If set to 0 (the default), then the return value from
+I<get_answers()> only returns entries for those DNSBLs that actually
+hit.
 
 =back
 
@@ -169,6 +177,9 @@ This method may only be called while a query is in flight.  It waits
 for DNS replies to come back and returns a reference to a list of I<hits>.
 Once I<get_answers()> returns, a query is no longer in flight.
 
+Note that the list of hits is I<not necessarily> returned in the same
+order as the original list of DNSBLs supplied to I<query_ip()>.
+
 Each hit in the returned list is a hash reference containing the
 following elements:
 
@@ -177,6 +188,11 @@ following elements:
 =item domain
 
 The domain of the DNSBL.
+
+=item hit
+
+Set to 1 if the DNSBL was hit or 0 if it was not.  (You will only get
+entries with hit set to 0 if you used the I<return_all> option to I<query_ip()>.)
 
 =item type
 
@@ -188,11 +204,18 @@ The data supplied (for normal and mask types)
 
 =item userdata
 
-The userdata as supplied in the query_ip() call
+The userdata as supplied in the I<query_ip()> call
 
 =item actual_hit
 
 The actual A record returned by the lookup that caused a hit.
+
+=item replycode
+
+The reply code from the DNS server (as a string).  Likely to be
+one of NOERROR, NXDOMAIN, SERVFAIL or TIMEOUT.  (TIMEOUT is not
+a real DNS reply code; it is synthesized by this Perl module if
+the lookup times out.)
 
 =back
 
@@ -241,12 +264,13 @@ sub query_ip
 	croak('First argument (ip address) is required')     unless $ipaddr;
 	croak('Second argument (dnsbl list) is required')    unless $dnsbls;
 
-	if ($options && exists($options->{early_exit})) {
-		$self->{early_exit} = $options->{early_exit};
-	} else {
-		$self->{early_exit} = 0;
+	foreach my $opt qw(early_exit return_all) {
+		if ($options && exists($options->{$opt})) {
+			$self->{$opt} = $options->{$opt};
+		} else {
+			$self->{$opt} = 0;
+		}
 	}
-
 	# Reverse the IP address in preparation for lookups
 	my $revip = $self->_reverse_address($ipaddr);
 
@@ -262,7 +286,15 @@ sub get_answers
 	croak("Cannot call get_answers unless a query is in flight")
 	    unless $self->{in_flight};
 
-	my $ans = $self->_collect_results();
+	$self->_collect_results();
+
+	my $ans = [];
+	foreach my $d (keys %{$self->{domains}}) {
+		foreach my $r (@{$self->{domains}->{$d}}) {
+			push(@$ans, $r) if ( $r->{hit} || $self->{return_all} );
+		}
+	}
+
 	$self->{in_flight} = 0;
 	delete $self->{sel};
 	delete $self->{sock_to_domain};
@@ -278,11 +310,12 @@ sub _build_domains
 
 	foreach my $entry (@$dnsbls) {
 		push(@{$domains->{$entry->{domain}}}, {
-			domain   => $entry->{domain},
-			type     => ($entry->{type} || 'normal'),
-			data     => $entry->{data},
-			userdata => $entry->{userdata},
-			hit      => 0
+			domain    => $entry->{domain},
+			type      => ($entry->{type} || 'normal'),
+			data      => $entry->{data},
+			userdata  => $entry->{userdata},
+			hit       => 0,
+			replycode => 'TIMEOUT',
 		});
 	}
 	return $domains;
@@ -309,17 +342,18 @@ sub _send_queries
 sub _collect_results
 {
 	my ($self) = @_;
-	my $ans = [];
 
 	my $terminate = time() + $self->{timeout};
 	my $sel = $self->{sel};
 
-	while(time() <= $terminate && $sel->count()) {
+	my $got_a_hit = 0;
+
+	while(time() <= $terminate) {
 		my $expire = $terminate - time();
 		$expire = 1 if ($expire < 1);
 		my @ready = $sel->can_read($expire);
 
-		return $ans unless scalar(@ready);
+		return $got_a_hit unless scalar(@ready);
 
 		foreach my $sock (@ready) {
 			my $pack = $self->{resolver}->bgread($sock);
@@ -327,14 +361,12 @@ sub _collect_results
 			$sel->remove($sock);
 			undef($sock);
 			next unless $pack;
-			next if ($pack->header->rcode eq 'SERVFAIL' ||
-				 $pack->header->rcode eq 'NXDOMAIN');
-			$self->_process_reply($domain, $pack, $ans);
+			if ($self->_process_reply($domain, $pack)) {
+				$got_a_hit = 1;
+			}
 		}
-		return $ans if ($self->{early_exit} && (scalar(@$ans) > 0));
-
+		return if $got_a_hit && $self->{early_exit};
 	}
-	return $ans;
 }
 
 sub _process_reply
@@ -343,10 +375,21 @@ sub _process_reply
 
 	my $entry = $self->{domains}->{$domain};
 
+	my $rcode = $pack->header->rcode;
+	if ($rcode eq 'SERVFAIL' || $rcode eq 'NXDOMAIN') {
+		foreach my $dnsbl (@$entry) {
+			next if $dnsbl->{hit};
+			$dnsbl->{replycode} = $rcode;
+		}
+		return 0;
+	}
+
+	my $got_a_hit = 0;
 	foreach my $rr ($pack->answer) {
 		next unless $rr->type eq 'A';
 		foreach my $dnsbl (@$entry) {
 			next if $dnsbl->{hit};
+			$dnsbl->{replycode} = $rcode;
 			if ($dnsbl->{type} eq 'normal') {
 				$dnsbl->{hit} = 1;
 			} elsif ($dnsbl->{type} eq 'match') {
@@ -373,10 +416,11 @@ sub _process_reply
 
 			if( $dnsbl->{hit} ) {
 				$dnsbl->{actual_hit} = $rr->address;
-				push(@$ans, $dnsbl);
+				$got_a_hit = 1;
 			}
 		}
 	}
+	return $got_a_hit;
 }
 
 sub _reverse_address

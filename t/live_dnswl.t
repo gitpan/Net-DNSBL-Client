@@ -12,7 +12,7 @@ $c->query_ip('127.0.0.2', [
 	{
 		domain => 'list.dnswl.org',
 		type   => 'mask',
-		data   => '127.0.255.255',
+		data   => '0.0.255.255',
 		userdata => 'Matches any dnswl.org category',
 	},
 ]);
@@ -22,8 +22,9 @@ my @expected = (
 		domain => 'list.dnswl.org',
 		userdata => 'Matches any dnswl.org category',
 		hit => 1,
-		data => '127.0.255.255',
+		data => '0.0.255.255',
 		actual_hit => '127.0.10.0',
+		replycode  => 'NOERROR',
 		type => 'mask'
 	},
 );

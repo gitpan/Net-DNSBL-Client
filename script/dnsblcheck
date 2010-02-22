@@ -30,26 +30,37 @@ foreach my $dnsbl (@ARGV) {
 }
 
 my $c = Net::DNSBL::Client->new();
-$c->query_ip($ipaddr, $dnsbls);
+$c->query_ip($ipaddr, $dnsbls, {return_all => 1});
 my $ans = $c->get_answers();
 if (scalar(@$ans) == 0) {
 	print "No hits.\n";
 	exit(0);
 }
 
-foreach my $entry (@$ans) {
+my $nhits = 0;
+# Display hits first, then misses.
+foreach my $entry ((grep { $_->{hit} } @$ans), (grep { !$_->{hit} } @$ans)) {
 	my $domain = $entry->{domain};
 	my $type   = $entry->{type};
 	my $data   = $entry->{data};
-	my $hit    = $entry->{actual_hit};
+	my $name;
 	if ($type ne 'normal') {
-		print "HIT: $domain ($type:$data): $hit\n";
+		$name = "$domain ($type:$data)";
 	} else {
-		print "HIT: $domain (normal): $hit\n";
+		$name = "$domain (normal)";
+	}
+	if ($entry->{hit}) {
+		my $hit    = $entry->{actual_hit};
+		print "HIT:  $name: $hit\n";
+		$nhits++;
+	} else {
+		my $rcode = $entry->{replycode};
+		print "MISS: $name: $rcode\n"
 	}
 }
 
-exit(scalar(@$ans));
+exit($nhits);
+
 
 __END__
 
@@ -71,6 +82,10 @@ I<zen.spamhaus.org>) or a domain:type:data triple (for example,
 I<zen.spamhaus.org:match:127.0.0.4> or I<dnsbl.tld:mask:8>).  See
 the Net::DNSBL::Client documentation for details about
 I<match> and I<mask> zones.
+
+=head1 EXIT VALUE
+
+The program's exit value is the number of DNSBLs that were hit.
 
 =head1 AUTHOR
 
