@@ -21,7 +21,7 @@ my @expected = ({
 		userdata   => undef,
 		hit        => 1,
 		data       => '127.0.0.2',
-		actual_hit => '127.0.0.2',
+		actual_hits => [ '127.0.0.2' ],
 		replycode  => 'NOERROR',
 		type       => 'match'
 	});

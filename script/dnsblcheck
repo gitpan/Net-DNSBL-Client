@@ -50,8 +50,7 @@ foreach my $entry ((grep { $_->{hit} } @$ans), (grep { !$_->{hit} } @$ans)) {
 		$name = "$domain (normal)";
 	}
 	if ($entry->{hit}) {
-		my $hit    = $entry->{actual_hit};
-		print "HIT:  $name: $hit\n";
+		print "HIT:  $name: " . join(', ', @{$entry->{actual_hits}} ) . "\n";
 		$nhits++;
 	} else {
 		my $rcode = $entry->{replycode};

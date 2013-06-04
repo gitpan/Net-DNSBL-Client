@@ -5,11 +5,13 @@ inc/Module/Install/Can.pm
 inc/Module/Install/Fetch.pm
 inc/Module/Install/Makefile.pm
 inc/Module/Install/Metadata.pm
+inc/Module/Install/Scripts.pm
 inc/Module/Install/Win32.pm
 inc/Module/Install/WriteAll.pm
 lib/Net/DNSBL/Client.pm
 Makefile.PL
-MANIFEST
+MANIFEST			This list of files
+MANIFEST.SKIP
 META.yml
 README
 script/dnsblcheck

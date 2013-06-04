@@ -1,3 +1,16 @@
+0.204	Tue, 06 Jun 2013 15:05:00 -0400 dfs
+
+	Add "lookup_keys" optional parameter to query_ip.
+
+	Support TXT lookups as well as A lookups.
+
+	Fix deprecation warning (CPAN ticket #85790)
+
+0.201	Thu, 04 Mar 2010 14:35:34 -0500 dmo
+
+	Change "actual_hit" answer string to "actual_hits" arrayref of hits to
+        preserve all 'normal' mode results.
+
 0.200	Mon, 22 Feb 2010 16:12:37 -0500	dfs
 
 	Add "return_all" option to query_ip.  This returns all DNSBLs, even
