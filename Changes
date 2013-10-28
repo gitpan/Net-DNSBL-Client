@@ -1,3 +1,8 @@
+0.205	Mon, 28 Oct 2013 10:19:00 -0400 dfs
+
+	Use explicit TXT and A queries rather than "ANY" queries.  Some
+	DNS servers do not answer ANY queries.
+
 0.204	Tue, 06 Jun 2013 15:05:00 -0400 dfs
 
 	Add "lookup_keys" optional parameter to query_ip.

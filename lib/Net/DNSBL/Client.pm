@@ -7,7 +7,7 @@ use Carp;
 use Net::DNS::Resolver;
 use IO::Select;
 
-our $VERSION = '0.204';
+our $VERSION = '0.205';
 
 =head1 NAME
 
@@ -368,13 +368,31 @@ sub _send_queries
 		} else {
 			$lookup_key = '';
 		}
-		my $sock;
-		$sock = $self->{resolver}->bgsend("$ip_or_domain$lookup_key.$domain", 'ANY');
-		unless ($sock) {
-			die $self->{resolver}->errorstring;
+		my($sock1, $sock2);
+		foreach my $e (@{$self->{domains}->{$domain}}) {
+			if ($e->{type} eq 'txt') {
+				$sock1 ||= $self->{resolver}->bgsend("$ip_or_domain$lookup_key.$domain", 'TXT');
+				unless ($sock1) {
+					die $self->{resolver}->errorstring;
+				}
+			} else {
+				$sock2 ||= $self->{resolver}->bgsend("$ip_or_domain$lookup_key.$domain", 'A');
+				unless ($sock2) {
+					die $self->{resolver}->errorstring;
+				}
+			}
+			last if ($sock1 && $sock2);
 		}
-		$self->{sock_to_domain}->{$sock} = $domain;
-		$self->{sel}->add($sock);
+
+
+		if ($sock1) {
+			$self->{sock_to_domain}->{$sock1} = $domain;
+			$self->{sel}->add($sock1);
+		}
+		if ($sock2) {
+			$self->{sock_to_domain}->{$sock2} = $domain;
+			$self->{sel}->add($sock2);
+		}
 	}
 }
 

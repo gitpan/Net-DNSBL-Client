@@ -3,7 +3,7 @@ use Test::Deep;
 use Net::DNSBL::Client;
 
 plan skip_all => 'DNS unavailable; skipping tests' unless Net::DNS::Resolver->new->query('cpan.org');
-plan tests => 1;
+plan tests => 2;
 
 my $c = Net::DNSBL::Client->new();
 
@@ -26,6 +26,28 @@ my @expected = (
 		actual_hits => [ '127.0.10.0' ],
 		replycode  => 'NOERROR',
 		type => 'mask'
+	},
+);
+$got = $c->get_answers();
+cmp_deeply( $got, bag(@expected), "Got expected answers from dnswl testpoint") || diag explain \@expected, $got;
+
+$c->query_ip('127.0.0.2', [
+	{
+		domain => 'list.dnswl.org',
+		type   => 'txt',
+		userdata => 'Matches any dnswl.org category',
+	},
+]);
+
+@expected = (
+	{
+		domain => 'list.dnswl.org',
+		userdata => 'Matches any dnswl.org category',
+		hit => 1,
+		data => undef,
+		actual_hits => [ 'dnswl.test http://dnswl.org/s?s=127' ],
+		replycode  => 'NOERROR',
+		type => 'txt'
 	},
 );
 my $got = $c->get_answers();
